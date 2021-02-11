@@ -99,21 +99,21 @@ publishing {
     }
 
 
-    repositories {
-        maven {
-            val nexusUsername: String? by project
-            val nexusPassword: String? by project
-            credentials {
-                username = nexusUsername
-                password = nexusPassword
-            }
-            val snapshotsRepoUrl = uri("https://oss.sonatype.org/content/repositories/snapshots")
-            val releasesRepoUrl = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2")
-            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
-        }
-    }
+//    repositories {
+//        maven {
+//            val nexusUsername: String? by project
+//            val nexusPassword: String? by project
+//            credentials {
+//                username = nexusUsername
+//                password = nexusPassword
+//            }
+//            val snapshotsRepoUrl = uri("https://oss.sonatype.org/content/repositories/snapshots")
+//            val releasesRepoUrl = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2")
+//            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+//        }
+//    }
 }
 
-signing {
-    sign(publishing.publications["jerseyJunit"])
-}
+//signing {
+//    sign(publishing.publications["jerseyJunit"])
+//}
