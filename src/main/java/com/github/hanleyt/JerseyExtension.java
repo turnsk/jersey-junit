@@ -114,7 +114,7 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
             jerseyTest = getStore(context).get(JerseyTest.class, JerseyTest.class);
             if (jerseyTest == null) {
                 // Method beforeAll was not called
-                throw new IllegalStateException("To use single container feature, JerseyExtension must be registered to a static field");
+                throw new IllegalStateException("To use single container setting, JerseyExtension must be registered at a class level");
             }
         } else {
             jerseyTest = initJerseyTest(context);
