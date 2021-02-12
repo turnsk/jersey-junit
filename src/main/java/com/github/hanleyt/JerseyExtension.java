@@ -19,6 +19,7 @@ import javax.ws.rs.core.Application;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -30,7 +31,7 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
 
     private final Function<ExtensionContext, TestContainerFactory> testContainerFactoryProvider;
     private final Function<ExtensionContext, DeploymentContext> deploymentContextProvider;
-    private final BiFunction<ExtensionContext, ClientConfig, ClientConfig> configProvider;
+    private final BiConsumer<ExtensionContext, ClientConfig> configProvider;
     private final boolean singleContainer;
 
     private JerseyExtension() {
@@ -78,12 +79,12 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
     public JerseyExtension(Function<ExtensionContext, TestContainerFactory> testContainerFactoryProvider,
                            Function<ExtensionContext, DeploymentContext> deploymentContextProvider,
                            BiFunction<ExtensionContext, ClientConfig, ClientConfig> configProvider) {
-        this(testContainerFactoryProvider, deploymentContextProvider, configProvider, false);
+        this(testContainerFactoryProvider, deploymentContextProvider, configProvider::apply, false);
     }
 
-    private JerseyExtension(Function<ExtensionContext, TestContainerFactory> testContainerFactoryProvider,
+    protected JerseyExtension(Function<ExtensionContext, TestContainerFactory> testContainerFactoryProvider,
                            Function<ExtensionContext, DeploymentContext> deploymentContextProvider,
-                           BiFunction<ExtensionContext, ClientConfig, ClientConfig> configProvider,
+                           BiConsumer<ExtensionContext, ClientConfig> configProvider,
                            boolean singleContainer) {
         this.testContainerFactoryProvider = testContainerFactoryProvider;
         this.deploymentContextProvider = deploymentContextProvider;
@@ -111,6 +112,10 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
         JerseyTest jerseyTest;
         if (singleContainer) {
             jerseyTest = getStore(context).get(JerseyTest.class, JerseyTest.class);
+            if (jerseyTest == null) {
+                // Method beforeAll was not called
+                throw new IllegalStateException("To use single container feature, JerseyExtension must be registered to a static field");
+            }
         } else {
             jerseyTest = initJerseyTest(context);
         }
@@ -137,7 +142,7 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
             @Override
             protected void configureClient(ClientConfig config) {
                 if (configProvider != null) {
-                    config = configProvider.apply(context, config);
+                    configProvider.accept(context, config);
                 }
                 super.configureClient(config);
             }
@@ -172,21 +177,33 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
         return context.getStore(ExtensionContext.Namespace.GLOBAL);
     }
 
+    public static Builder builder() {
+        return new Builder();
+    }
+
     public static class Builder {
         private Function<ExtensionContext, TestContainerFactory> testContainerFactoryProvider;
         private Function<ExtensionContext, DeploymentContext> deploymentContextProvider;
-        private BiFunction<ExtensionContext, ClientConfig, ClientConfig> configProvider;
+        private BiConsumer<ExtensionContext, ClientConfig> configProvider;
         private boolean singleContainer;
 
-        public Builder() {
+        private Builder() {
+        }
+
+        public Builder application(Application application) {
+            return application(context -> application);
         }
 
         public Builder application(Supplier<Application> applicationSupplier) {
-            return application((unused) -> applicationSupplier.get());
+            return application(context -> applicationSupplier.get());
         }
 
         public Builder application(Function<ExtensionContext, Application> applicationProvider) {
-            return deploymentContext((context) -> DeploymentContext.builder(applicationProvider.apply(context)).build());
+            return deploymentContext(context -> DeploymentContext.builder(applicationProvider.apply(context)).build());
+        }
+
+        public Builder deploymentContext(DeploymentContext deploymentContext) {
+            return deploymentContext(context -> deploymentContext);
         }
 
         public Builder deploymentContext(Function<ExtensionContext, DeploymentContext> deploymentContextProvider) {
@@ -194,12 +211,16 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
             return this;
         }
 
+        public Builder testContainerFactory(TestContainerFactory testContainerFactory) {
+            return testContainerFactory(context -> testContainerFactory);
+        }
+
         public Builder testContainerFactory(Function<ExtensionContext, TestContainerFactory> testContainerFactoryProvider) {
             this.testContainerFactoryProvider = testContainerFactoryProvider;
             return this;
         }
 
-        public Builder clientConfig(BiFunction<ExtensionContext, ClientConfig, ClientConfig> configProvider) {
+        public Builder clientConfig(BiConsumer<ExtensionContext, ClientConfig> configProvider) {
             this.configProvider = configProvider;
             return this;
         }
@@ -209,9 +230,17 @@ public class JerseyExtension implements BeforeAllCallback, AfterAllCallback,
             return this;
         }
 
-        public JerseyExtension build() {
+        /**
+         * Create {@link JerseyExtension} instance.<br>
+         * {@link DeploymentContext} must be set using one of the
+         * application or deploymentContext methods.
+         *
+         * @return new {@link JerseyExtension} instance
+         * @throws IllegalStateException When {@link DeploymentContext} is not set.
+         */
+        public JerseyExtension build() throws IllegalStateException {
             if (deploymentContextProvider == null) {
-                throw new IllegalStateException("DeploymentContext not set. Use one of application or deploymentContext methods.");
+                throw new IllegalStateException("DeploymentContext not set");
             }
             return new JerseyExtension(testContainerFactoryProvider, deploymentContextProvider, configProvider, singleContainer);
         }
